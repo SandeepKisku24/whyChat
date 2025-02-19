@@ -5,51 +5,53 @@ import (
 	"errors"
 	"log"
 	"os"
-	"path/filepath"
 
 	"cloud.google.com/go/firestore"
-	"github.com/joho/godotenv"
+	firebase "firebase.google.com/go/v4"
+	"firebase.google.com/go/v4/auth"
 	"google.golang.org/api/option"
 )
 
 var client *firestore.Client
 var ctx context.Context
+var firebaseApp *firebase.App
+var authClient *auth.Client
 
-// InitFirestore initializes Firestore client
+// InitFirestore initializes Firestore and Firebase Authentication clients
 func InitFirestore() error {
 	ctx = context.Background()
 
-	// ✅ Load environment variables from .env
-	if err := godotenv.Load(); err != nil {
-		log.Println("Warning: No .env file found, relying on system environment variables")
+	// Get the service account credentials path and Firebase API key from environment variables
+	serviceAccountPath := os.Getenv("FIREBASE_CREDENTIALS")
+	if serviceAccountPath == "" {
+		log.Fatal("FIREBASE_CREDENTIALS environment variable is not set")
+		return errors.New("FIREBASE_CREDENTIALS not set")
 	}
 
-	// ✅ Get environment variables
-	projectID := os.Getenv("FIREBASE_PROJECT_ID")
-	credentialsPath := os.Getenv("FIREBASE_CREDENTIALS")
-
-	// ✅ Validate environment variables
-	if projectID == "" || credentialsPath == "" {
-		log.Fatal("Missing FIREBASE_PROJECT_ID or FIREBASE_CREDENTIALS in environment variables")
-		return errors.New("missing Firebase config")
-	}
-
-	// ✅ Convert relative path to absolute
-	absCredentialsPath, err := filepath.Abs(credentialsPath)
+	// Initialize Firebase app with the credentials file
+	opt := option.WithCredentialsFile(serviceAccountPath)
+	var err error
+	firebaseApp, err = firebase.NewApp(ctx, nil, opt)
 	if err != nil {
-		log.Fatalf("Failed to get absolute path: %v", err)
+		log.Fatalf("Failed to initialize Firebase app: %v", err)
 		return err
 	}
 
-	// ✅ Initialize Firestore
-	sa := option.WithCredentialsFile(absCredentialsPath)
-	client, err = firestore.NewClient(ctx, projectID, sa)
+	// Initialize Firestore client
+	client, err = firebaseApp.Firestore(ctx)
 	if err != nil {
 		log.Fatalf("Failed to create Firestore client: %v", err)
 		return err
 	}
 
-	log.Println("Firestore initialized successfully!")
+	// Initialize Firebase Authentication client
+	authClient, err = firebaseApp.Auth(ctx)
+	if err != nil {
+		log.Fatalf("Failed to create Firebase Auth client: %v", err)
+		return err
+	}
+
+	log.Println("Firebase and Firestore initialized successfully!")
 	return nil
 }
 
@@ -59,6 +61,14 @@ func GetFirestoreClient() (*firestore.Client, context.Context, error) {
 		return nil, nil, errors.New("Firestore client is not initialized")
 	}
 	return client, ctx, nil
+}
+
+// GetAuthClient safely retrieves the Firebase Auth client
+func GetAuthClient() *auth.Client {
+	if authClient == nil {
+		log.Fatalf("Firebase Auth client is not initialized")
+	}
+	return authClient
 }
 
 // CloseFirestoreClient closes Firestore client connection

@@ -1,30 +1,48 @@
 package handlers
 
 import (
-	"net/http"
-
-	"chat-backend/models"
 	"chat-backend/services"
+
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
-// SendMessageHandler handles sending a new message
+// SendMessageHandler allows users to send messages to the group
 func SendMessageHandler(c *gin.Context) {
-	var message models.Message
+	var request struct {
+		SenderID    string `json:"sender_id" binding:"required"`
+		ChatGroupID string `json:"chat_group_id" binding:"required"`
+		Message     string `json:"message" binding:"required"`
+	}
 
-	// Bind JSON data
-	if err := c.ShouldBindJSON(&message); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
 		return
 	}
 
-	// Call service to send message
-	err := services.SendMessage(message)
+	message, err := services.SendMessage(request.SenderID, request.ChatGroupID, request.Message)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send message"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Message sent successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": "Message sent", "data": message})
+}
+
+// GetMessagesHandler retrieves all messages from the global chat
+func GetMessagesHandler(c *gin.Context) {
+	chatGroupID := c.Query("chat_group_id")
+	if chatGroupID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Chat group ID is required"})
+		return
+	}
+
+	messages, err := services.GetMessages(chatGroupID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch messages"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"messages": messages})
 }
