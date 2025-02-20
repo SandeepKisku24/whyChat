@@ -10,3 +10,13 @@ type Message struct {
 	Timestamp   time.Time `json:"timestamp" firestore:"timestamp"`
 	MessageType string    `firestore:"messageType"`
 }
+
+type MessageResponse struct {
+	MessageID   string    `json:"messageId"`
+	ChatGroupID string    `json:"chatGroupId"`
+	SenderID    string    `json:"senderId"`
+	SenderName  string    `json:"senderName"`
+	Message     string    `json:"message"`
+	Timestamp   time.Time `json:"timestamp"`
+	MessageType string    `json:"messageType"`
+}
