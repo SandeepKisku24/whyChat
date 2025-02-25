@@ -13,6 +13,8 @@ func RegisterRoutes(router *gin.Engine) {
 	router.POST("/messages", handlers.SendMessageHandler)
 
 	router.GET("/messages", handlers.GetMessagesHandler)
+
+	router.GET("/ws", handlers.HandleWebSocket)
 	// OTP Routes
 	// router.POST("/generate-otp", handlers.GenerateOTP)
 	// router.POST("/verify-otp", handlers.VerifyOTP)

@@ -6,66 +6,100 @@ import (
 	"log"
 	"time"
 
+	"cloud.google.com/go/firestore"
 	"github.com/google/uuid"
+	"google.golang.org/api/iterator"
 )
 
-// SendMessage saves a new message to Firestore
-func SendMessage(senderID, chatGroupID, messageText string) (*models.Message, error) {
+// SendMessage saves the message in Firestore
+func SendMessage(senderID, chatGroupID, message string) (*models.Message, error) {
 	client, ctx, err := config.GetFirestoreClient()
 	if err != nil {
+		log.Println("Firestore client error:", err)
 		return nil, err
 	}
 
-	// Create new message
+	// Generate unique message ID
 	messageID := uuid.New().String()
-	message := models.Message{
+
+	// Create message object
+	msg := models.Message{
 		MessageID:   messageID,
 		ChatGroupID: chatGroupID,
 		SenderID:    senderID,
-		Message:     messageText,
+		Message:     message,
 		Timestamp:   time.Now(),
 		MessageType: "text",
 	}
 
-	// Save message to Firestore
-	_, err = client.Collection("messages").Doc(messageID).Set(ctx, message)
+	// Store message in Firestore
+	_, err = client.Collection("messages").Doc(messageID).Set(ctx, msg)
 	if err != nil {
-		log.Printf(" Error sending message: %v", err)
+		log.Println("Failed to store message:", err)
 		return nil, err
 	}
 
-	log.Printf("Message sent successfully to chat group [%s]: %s", chatGroupID, messageText)
-	return &message, nil
+	// Reference to chat group document
+	chatGroupRef := client.Collection("chat_groups").Doc(chatGroupID)
+
+	// Check if chat group exists
+	_, err = chatGroupRef.Get(ctx)
+	if err != nil {
+		// If the document doesn't exist, create it with an empty MessageIDs array
+		_, err = chatGroupRef.Set(ctx, map[string]interface{}{
+			"MessageIDs": []string{messageID}, // Initialize with the first message
+		})
+		if err != nil {
+			log.Println("Failed to create chat group:", err)
+			return nil, err
+		}
+	} else {
+		// If chat group exists, update it normally
+		_, err = chatGroupRef.Update(ctx, []firestore.Update{
+			{Path: "MessageIDs", Value: firestore.ArrayUnion(messageID)},
+		})
+		if err != nil {
+			log.Println("Failed to update chat group:", err)
+			return nil, err
+		}
+
+	}
+
+	return &msg, nil
 }
 
-// GetMessages retrieves all messages from the global chat, sorted by timestamp
+// GetMessages retrieves messages from Firestore
 func GetMessages(chatGroupID string) ([]models.Message, error) {
 	client, ctx, err := config.GetFirestoreClient()
 	if err != nil {
+		log.Println("Firestore client error:", err)
 		return nil, err
 	}
 
-	log.Printf("🔍 Fetching messages for chat group: %s", chatGroupID)
+	// Query messages
+	iter := client.Collection("messages").
+		Where("chatGroupId", "==", chatGroupID). // Ensure exact match
+		OrderBy("timestamp", firestore.Asc).
+		Documents(ctx)
 
-	// Query messages in the specified chat group, ordered by timestamp
-	query := client.Collection("messages").Where("chatGroupId", "==", chatGroupID)
-	docs, err := query.Documents(ctx).GetAll()
-	if err != nil {
-		log.Printf("Firestore query error: %v", err)
-		return nil, err
-	}
-
-	log.Printf("Retrieved %d messages from chat group [%s]", len(docs), chatGroupID)
-
-	// Parse messages
 	var messages []models.Message
-	for _, doc := range docs {
-		var message models.Message
-		if err := doc.DataTo(&message); err != nil {
-			log.Printf("Error parsing message: %v", err)
+	for {
+		doc, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			log.Println("Failed to iterate messages:", err)
+			return nil, err
+		}
+
+		var msg models.Message
+		if err := doc.DataTo(&msg); err != nil {
+			log.Println("Failed to parse message data:", err)
 			continue
 		}
-		messages = append(messages, message)
+
+		messages = append(messages, msg)
 	}
 
 	return messages, nil
