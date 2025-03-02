@@ -104,3 +104,25 @@ func GetMessages(chatGroupID string) ([]models.Message, error) {
 
 	return messages, nil
 }
+
+func DeleteMessage(messageID string) error {
+	client, ctx, err := config.GetFirestoreClient()
+	if err != nil {
+		log.Println(" FireStore client error")
+		return err
+	}
+
+	msgRef := client.Collection("messages").Doc(messageID)
+
+	_, err = msgRef.Update(ctx, []firestore.Update{
+		{Path: "isDeleted", Value: true},
+	})
+
+	if err != nil {
+		log.Println("the message is not deleted")
+		return err
+	}
+
+	return nil
+
+}

@@ -46,3 +46,22 @@ func GetMessagesHandler(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"messages": messages})
 }
+
+func DeleteMessagehandler(c *gin.Context) {
+	var request struct {
+		MessageID string `json: "message_id" binding: "required"`
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+		return
+	}
+
+	err := services.DeleteMessage(request.MessageID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete message"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "message deleted"})
+}

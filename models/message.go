@@ -9,4 +9,5 @@ type Message struct {
 	Message     string    `firestore:"message"`
 	Timestamp   time.Time `json:"timestamp" firestore:"timestamp"`
 	MessageType string    `firestore:"messageType"`
+	IsDeleted   bool      `firestore:"isDeleted"`
 }
